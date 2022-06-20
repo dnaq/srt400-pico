@@ -1,0 +1,19 @@
+.program keyscan
+.side_set 1 opt
+    set y, 0             ; y contains the last keystate sent
+.wrap_target
+mainloop:
+    set x, 22            ; 23 steno keys to read
+    set pins 1           ; latch enable
+inner:
+    in pins 1 side 1     ; read DATA_IN, set CLK high
+    jmp x-- inner side 0 ; loop 23 times, set CLK low
+    set pins 0           ; latch disable
+    in null 9            ; isr <<= 9, aligns output
+    mov x, isr           ; we're done with x, so reuse it 
+    jmp x!=y sendstate   ; if the keystate has changed, send it
+    jmp mainloop         ; otherwise loop
+sendstate:
+    push                 ; push data from input shift register to controller
+    mov y, x             ; y contains the last keystate sent
+    .wrap
