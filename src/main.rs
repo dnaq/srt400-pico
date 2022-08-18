@@ -70,46 +70,6 @@ mod app {
         .ok()
         .unwrap();
 
-        // Set up the USB driver
-        let usb_bus = cx
-            .local
-            .usb_bus
-            .insert(UsbBusAllocator::new(hal::usb::UsbBus::new(
-                pac.USBCTRL_REGS,
-                pac.USBCTRL_DPRAM,
-                clocks.usb_clock,
-                true,
-                &mut pac.RESETS,
-            )));
-
-        // Set up the USB Communications Class Device driver for debugging
-        let debug_port = DebugPort(SerialPort::new(usb_bus));
-
-        // This is the hid-descriptor for the plover-hid protocol
-        // see https://github.com/dnaq/plover-machine-hid
-        const DESCRIPTOR: &[u8] = &[
-            0x06, 0x50, 0xff, // UsagePage (65360)
-            0x0a, 0x56, 0x4c, // Usage (19542)
-            0xa1, 0x02, // Collection (Logical)
-            0x85, 0x50, //     ReportID (80)
-            0x25, 0x01, //     LogicalMaximum (1)
-            0x75, 0x01, //     ReportSize (1)
-            0x95, 0x40, //     ReportCount (64)
-            0x05, 0x0a, //     UsagePage (ordinal)
-            0x19, 0x00, //     UsageMinimum (Ordinal(0))
-            0x29, 0x3f, //     UsageMaximum (Ordinal(63))
-            0x81, 0x02, //     Input (Variable)
-            0xc0, // EndCollection
-        ];
-        let hid_device = HIDClass::new(usb_bus, DESCRIPTOR, 20);
-
-        let usb_device = UsbDeviceBuilder::new(usb_bus, UsbVidPid(0x16c0, 0x27dd))
-            .manufacturer("Stentura")
-            .product("SRT400")
-            .serial_number("TEST")
-            .device_class(0)
-            .build();
-
         // set up the pins in the right state for the pio
         // state machine
         let sio = hal::Sio::new(pac.SIO);
@@ -158,6 +118,52 @@ mod app {
         // whenever there is data in the rx fifo
         pio.interrupts()[0].enable_rx_not_empty_interrupt(0);
         let _sm = sm.start();
+
+
+        // Set up the USB driver
+        // We do this last in the init function so that we can enable interrupts as soon as
+        // possible to make sure that `poll` is called as soon as possible. This is the recommended
+        // workaround described here: https://docs.rs/rp2040-hal/latest/rp2040_hal/usb/index.html.
+        // It might be better to just set `.max_packet_size_ep0(64)` as also described in the
+        // documentation, instead of having racy code.
+        let usb_bus = cx
+            .local
+            .usb_bus
+            .insert(UsbBusAllocator::new(hal::usb::UsbBus::new(
+                pac.USBCTRL_REGS,
+                pac.USBCTRL_DPRAM,
+                clocks.usb_clock,
+                true,
+                &mut pac.RESETS,
+            )));
+
+        // Set up the USB Communications Class Device driver for debugging
+        let debug_port = DebugPort(SerialPort::new(usb_bus));
+
+        // This is the hid-descriptor for the plover-hid protocol
+        // see https://github.com/dnaq/plover-machine-hid
+        const DESCRIPTOR: &[u8] = &[
+            0x06, 0x50, 0xff, // UsagePage (65360)
+            0x0a, 0x56, 0x4c, // Usage (19542)
+            0xa1, 0x02, // Collection (Logical)
+            0x85, 0x50, //     ReportID (80)
+            0x25, 0x01, //     LogicalMaximum (1)
+            0x75, 0x01, //     ReportSize (1)
+            0x95, 0x40, //     ReportCount (64)
+            0x05, 0x0a, //     UsagePage (ordinal)
+            0x19, 0x00, //     UsageMinimum (Ordinal(0))
+            0x29, 0x3f, //     UsageMaximum (Ordinal(63))
+            0x81, 0x02, //     Input (Variable)
+            0xc0, // EndCollection
+        ];
+        let hid_device = HIDClass::new(usb_bus, DESCRIPTOR, 20);
+
+        let usb_device = UsbDeviceBuilder::new(usb_bus, UsbVidPid(0x16c0, 0x27dd))
+            .manufacturer("Stentura")
+            .product("SRT400")
+            .serial_number("TEST")
+            .device_class(0)
+            .build();
 
         (
             Shared {
