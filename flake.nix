@@ -8,7 +8,7 @@
   outputs = { self, nixpkgs, utils, rust-overlay }:
     utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlay ];};
+        pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ];};
         rust = pkgs.rust-bin.stable.latest.default.override {
           targets = [ "thumbv6m-none-eabi" ];
         };

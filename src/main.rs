@@ -97,7 +97,7 @@ mod app {
         // we want to run the statemachine at 30MHz
         // since that's the max clock speed of the SRT400
         // shift registers
-        let divisor = f64::from(clocks.reference_clock.freq().0) / 30.0;
+        let divisor = f64::from(clocks.reference_clock.freq().raw()) / 30.0;
         let (mut sm, rx, _tx) = hal::pio::PIOBuilder::from_program(installed)
             .side_set_pin_base(clk_pin_id)
             .in_pin_base(data_in_pin_id)
