@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rp-pico = "0.5.0"
+rp-pico = { version = "0.5.0", features = [ "rp2040-e5" ] }
 embedded-hal ="0.2.7"
 usb-device = "0.2.8"
 usbd-serial = "0.1.1"
