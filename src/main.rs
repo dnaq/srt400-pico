@@ -5,10 +5,11 @@
 // be linked)
 use panic_halt as _;
 
-#[rtic::app(device = rp_pico::pac)]
+#[rtic::app(device = rp_pico::pac, dispatchers = [SPI0_IRQ])]
 mod app {
     use core::fmt::{self, Write};
     use embedded_hal::digital::v2::OutputPin;
+    use rp2040_monotonic::{ExtU64, Rp2040Monotonic};
     use rp_pico::hal::{
         self,
         clocks::Clock,
@@ -31,6 +32,9 @@ mod app {
         }
     }
 
+    #[monotonic(binds=TIMER_IRQ_0, default = true)]
+    type MoMono = Rp2040Monotonic;
+
     #[shared]
     struct Shared {
         usb_device: UsbDevice<'static, hal::usb::UsbBus>,
@@ -42,6 +46,7 @@ mod app {
     struct Local {
         /// The RX fifo of the PIO state machine
         rx: rp_pico::hal::pio::Rx<(rp_pico::pac::PIO0, rp_pico::hal::pio::SM0)>,
+        ws: ws2812_pio::Ws2812Direct<rp_pico::pac::PIO1, hal::pio::SM0, hal::gpio::bank0::Gpio15>,
     }
 
     #[init(local = [
@@ -49,7 +54,6 @@ mod app {
         usb_bus: Option<usb_device::bus::UsbBusAllocator<hal::usb::UsbBus>> = None,
     ])]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
-
         // rtic exposes the pac as `cx.device`
         let mut pac = cx.device;
 
@@ -119,6 +123,16 @@ mod app {
         pio.interrupts()[0].enable_rx_not_empty_interrupt(0);
         let _sm = sm.start();
 
+        let (mut pio, sm0, _, _, _) = pac.PIO1.split(&mut pac.RESETS);
+        let ws: ws2812_pio::Ws2812Direct<hal::pac::PIO1, hal::pio::SM0, hal::gpio::bank0::Gpio15> =
+            ws2812_pio::Ws2812Direct::new(
+                pins.gpio15.into_mode(),
+                &mut pio,
+                sm0,
+                clocks.peripheral_clock.freq(),
+            );
+
+        let mono = rp2040_monotonic::Rp2040Monotonic::new(pac.TIMER);
 
         // Set up the USB driver
         // We do this last in the init function so that we can enable interrupts as soon as
@@ -165,14 +179,16 @@ mod app {
             .device_class(0)
             .build();
 
+        neopixel_task::spawn_after(60.micros()).ok();
+
         (
             Shared {
                 usb_device,
                 debug_port,
                 hid_device,
             },
-            Local { rx },
-            init::Monotonics(),
+            Local { rx, ws },
+            init::Monotonics(mono),
         )
     }
 
@@ -226,6 +242,14 @@ mod app {
                 }
             });
         }
+    }
+
+    #[task(local = [ws])]
+    fn neopixel_task(cx: neopixel_task::Context) {
+        use smart_leds::{SmartLedsWrite, RGB8};
+        let color: RGB8 = (255, 0, 255).into();
+        cx.local.ws.write([color].into_iter()).unwrap();
+        neopixel_task::spawn_after(60.micros()).ok();
     }
 
     #[idle]
